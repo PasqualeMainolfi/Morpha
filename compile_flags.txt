@@ -1,0 +1,9 @@
+-std=c++2b
+-Wextra
+-Wall
+-lfftw3
+-lsndfile
+-I/opt/homebrew/opt/fftw/include
+-I/opt/homebrew/opt/libsndfile/include
+-L/opt/homebrew/opt/fftw/lib
+-L/opt/homebrew/opt/libsndfile/lib
