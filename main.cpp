@@ -64,8 +64,11 @@ public:
 		free(this->ifftout);
 	}
 
-	void fft(dframe& source) {
-		std::memcpy(this->fftin, source.data(), sizeof(double) * this->buffer_length);
+	void fft(dframe& source, bool window) {
+		for (size_t i = 0; i < this->buffer_length; ++i) {
+			double win = 0.5 * (1.0 - std::cos(2.0 * M_PI * (double) i / ((double) this->buffer_length - 1.0)));
+			this->fftin[i] = window ? source[i] * win : source[i];
+		}
 		fftw_execute(this->fft_planner);
 	}
 
@@ -79,9 +82,9 @@ public:
 		return y;
 	}
 
-	dframe get_spectral_envelope(dframe& data, size_t cf, bool scale_factor) {
+	dframe get_spectral_envelope(dframe& data, size_t cf, bool scale_factor, bool window) {
 
-		this->fft(data);
+		this->fft(data, window);
 
 		dframe source_mag(this->half_buffer);
 		cframe source_log(this->half_buffer);
@@ -99,7 +102,7 @@ public:
 			ifft_log[i] *= w;
 		}
 
-		this->fft(ifft_log);
+		this->fft(ifft_log, false);
 
 		dframe real_cepstrum(this->half_buffer, 0.0);
 		for (size_t i = 0; i < this->half_buffer; ++i) {
@@ -124,17 +127,29 @@ public:
 		return real_cepstrum;
 	}
 
-	dframe morphing_process(dframe& carrier, dframe& modulator, size_t cf, double morphing_factor) {
+	dframe morphing_process(dframe& carrier, dframe& modulator, size_t cf, double morphing_factor, bool use_window) {
 
-		dframe source_cepstrum = this->get_spectral_envelope(carrier, cf, true);
-		dframe target_cepstrum = this->get_spectral_envelope(modulator, cf, true);
+		dframe source_cepstrum = this->get_spectral_envelope(carrier, cf, true, use_window);
+		dframe target_cepstrum = this->get_spectral_envelope(modulator, cf, true, use_window);
 
-		this->fft(modulator);
+		this->fft(carrier, use_window);
+		cframe carrier_fft(this->half_buffer, { 0.0, 0.0 });
+		for (size_t i = 0; i < this->half_buffer; ++i) {
+			carrier_fft[i][0] = this->fftout[i][0];
+			carrier_fft[i][1] = this->fftout[i][1];
+		}
+
+		this->fft(modulator, use_window);
+		cframe modulator_fft(this->half_buffer, { 0.0, 0.0 });
+		for (size_t i = 0; i < this->half_buffer; ++i) {
+			modulator_fft[i][0] = this->fftout[i][0];
+			modulator_fft[i][1] = this->fftout[i][1];
+		}
 
 		cframe target_flatten_spectrum(this->half_buffer);
 		for (size_t i = 0; i < this->half_buffer; ++i) {
-			double re = this->fftout[i][0] / target_cepstrum[i];
-			double im = this->fftout[i][1] / target_cepstrum[i];
+			double re = modulator_fft[i][0] / target_cepstrum[i];
+			double im = modulator_fft[i][1] / target_cepstrum[i];
 			target_flatten_spectrum[i] = { re, im };
 		}
 
@@ -145,22 +160,7 @@ public:
 			morphed[i] = { re, im };
 		}
 
-		this->fft(carrier);
-		cframe carrier_fft(this->half_buffer, { 0.0, 0.0 });
-		for (size_t i = 0; i < this->half_buffer; ++i) {
-			carrier_fft[i][0] = this->fftout[i][0];
-			carrier_fft[i][1] = this->fftout[i][1];
-		}
-
-		this->fft(modulator);
-		cframe modulator_fft(this->half_buffer, { 0.0, 0.0 });
-		for (size_t i = 0; i < this->half_buffer; ++i) {
-			modulator_fft[i][0] = this->fftout[i][0];
-			modulator_fft[i][1] = this->fftout[i][1];
-		}
-
 		double sx, cx, dx;
-
 		if (morphing_factor <= 0.5) {
 			sx = 1.0 - morphing_factor;
 			cx = 2.0 * morphing_factor;
@@ -226,7 +226,7 @@ int main() {
 	sf_close(target);
 
 	Morpha m(buffer_length);
-	dframe morphed = m.morphing_process(source_frame, target_frame, 22050, 0.5);
+	dframe morphed = m.morphing_process(source_frame, target_frame, 22050, 0.5, false);
 
 	SF_INFO info_morphed;
 	info_morphed.samplerate = 44100;

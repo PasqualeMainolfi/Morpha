@@ -13,7 +13,14 @@ The code is based on the theory described in:
 [1] J. Smith. Spectral Audio Signal Processing.W3K Publishing, 2011  
 [2] U. Zölzer. DAFX: Digital Audio Effects. Chichester, John Wiley & Sons, 2011  
 
-Morphing factor controls how carrier, modulator or morphed signal is present.  
-Using 0.0, only carrier is present, 0.5 morphed signal dominates and 1.0 only modulator is present.  
-From 0.0 to 0.5 transition gradually shifts from carrier to morphed signal. From 0.5 to 1.0 it gradually transitions from morphed signal to modulator.  
-cf value determines the cut-off frequency of the low-pass filter. A lower cf results in smoother spectral envelope shape.
+The main algorithm is in `main.cpp` file.  
+
+```c++
+Morpha m(buffer_length);
+dframe morphed = m.morphing_process(source_frame, target_frame, cf, morphing_factor, use_wiondow);
+```
+
+First two params `source_frame` and `target_frame` are source and target signals.  
+Third `cf`, determines the cut-off frequency of the low-pass filter. A lower cf results in smoother spectral envelope shape.  
+`morphing_factor` controls how source, target or morphed signal is present. Using 0.0, only carrier is present, 0.5 morphed signal dominates and 1.0 only modulator is present. From 0.0 to 0.5 transition gradually shifts from carrier to morphed signal. From 0.5 to 1.0 it gradually transitions from morphed signal to modulator.  
+The last argument `use_window` determines hann function should be applied. If `false` rectangular function will be used instead.
